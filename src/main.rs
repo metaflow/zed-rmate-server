@@ -30,6 +30,10 @@ struct Args {
     /// End the server when Zed closes
     #[arg(short, long, env = "RMATE_ONCE")]
     once: bool,
+
+    /// Additional arguments for the editor
+    #[arg(long, env = "RMATE_EDITOR_ARGS", default_value = "--wait")]
+    editor_args: String,
 }
 
 // Main
@@ -51,7 +55,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
     let args = Args::parse();
 
-    server::serve(args.bind, args.zed_bin, args.once).await?;
+    let editor_args: Vec<String> = args
+        .editor_args
+        .split_whitespace()
+        .map(String::from)
+        .collect();
+
+    server::serve(args.bind, args.zed_bin, editor_args, args.once).await?;
 
     Ok(())
 }

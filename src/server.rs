@@ -119,21 +119,22 @@ impl TmpFile {
     }
 
     /// Spawn Zed by calling the CLI with some options and a list of file paths.
-    fn spawn_zed(zed_bin: &Path, files: &[TmpFile]) -> Result<Child, std::io::Error> {
+    fn spawn_zed(zed_bin: &Path, editor_args: &[String], files: &[TmpFile]) -> Result<Child, std::io::Error> {
         let arg_new = files.iter().any(|r| r.remote_file.new);
 
         let paths = files.iter().map(|r| r.tmp_file_path_with_selection());
 
-        let mut args = vec!["--wait"];
+        let mut command = Command::new(zed_bin);
+
+        command.args(editor_args);
+
         if arg_new {
-            args.push("--new");
+            command.arg("--new");
         }
 
-        Command::new(zed_bin)
-            .args(args)
-            .args(paths)
-            .stdout(Stdio::piped())
-            .spawn()
+        command.args(paths).stdout(Stdio::piped());
+        info!("Spawning editor: {:?}", command);
+        command.spawn()
     }
 
     /// Send a local tmp file to the rmate stream.
@@ -158,6 +159,7 @@ impl TmpFile {
 pub(crate) async fn serve(
     bind: String,
     zed_bin: PathBuf,
+    editor_args: Vec<String>,
     once: bool,
 ) -> Result<(), Box<dyn Error>> {
     // Bind a TCP listener
@@ -171,10 +173,10 @@ pub(crate) async fn serve(
         info!("Got rmate connection from {addr:#?}");
 
         if once {
-            handle_connection(stream, zed_bin.clone()).await?;
+            handle_connection(stream, zed_bin.clone(), editor_args.clone()).await?;
             break Ok(()); // accept a single connection then terminate
         } else {
-            tokio::spawn(handle_connection(stream, zed_bin.clone()));
+            tokio::spawn(handle_connection(stream, zed_bin.clone(), editor_args.clone()));
         }
     }
 }
@@ -187,7 +189,11 @@ pub(crate) async fn serve(
 /// - Open the tmp file in Zed
 /// - Watch the tmp file for changes and send the file to the connection
 /// - On Zed close or remote connection close remove the tmp file
-async fn handle_connection(stream: TcpStream, zed_bin: PathBuf) -> Result<(), std::io::Error> {
+async fn handle_connection(
+    stream: TcpStream,
+    zed_bin: PathBuf,
+    editor_args: Vec<String>,
+) -> Result<(), std::io::Error> {
     // Send server identification
     let mut conn = RmateConnection::new(BufReader::new(stream)).await?;
 
@@ -216,7 +222,7 @@ async fn handle_connection(stream: TcpStream, zed_bin: PathBuf) -> Result<(), st
 
     // Open the tmp files in Zed
     info!("Opening Zed");
-    let mut zed = TmpFile::spawn_zed(&zed_bin, &files)?;
+    let mut zed = TmpFile::spawn_zed(&zed_bin, &editor_args, &files)?;
 
     loop {
         tokio::select! {

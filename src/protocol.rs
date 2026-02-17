@@ -48,7 +48,11 @@ where
         let mut buf = String::new();
         loop {
             // Read an rmate command
-            let _n = self.stream.read_line(&mut buf).await?;
+            let n = self.stream.read_line(&mut buf).await?;
+            if n == 0 {
+                debug!("EOF reached while reading client command");
+                return Ok(None);
+            }
             debug!("Parsing {buf:#?} line");
 
             // Match command or skip empty lines and retry
@@ -123,7 +127,12 @@ impl RmateFile {
         debug!("Reading client open headers");
         loop {
             // Read key-value lines
-            let _ = reader.read_line(&mut buf).await?;
+            let n = reader.read_line(&mut buf).await?;
+            if n == 0 {
+                return Err(Error::other(
+                    "Unexpected EOF while parsing protocol headers",
+                ));
+            }
             debug!("Parsing {buf:#?} line");
             let (key, value) = buf
                 .split_once(": ")

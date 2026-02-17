@@ -5,7 +5,7 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use clap::Parser;
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use std::path::PathBuf;
 
 use std::error::Error;
